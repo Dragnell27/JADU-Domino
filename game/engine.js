@@ -283,7 +283,9 @@ function autoMove(state, seat, pick = lowestMove) {
     if (m) {
       play(state, seat, m.tile, m.side);
       events.push({ type: 'play', tile: m.tile });
-      if (state.status === 'playing' && state.turn === seat) { // doble: queda retenido o con extra
+      // Doble: queda con extra o retenido y se cede. Ojo: el turno también puede volver a `seat` sin extra ni retención
+      // (los demás se saltaron por pozo vacío y sin jugada); entonces es un turno nuevo y no hay nada que ceder.
+      if (state.status === 'playing' && state.turn === seat && (state.bonus || state.hold)) {
         if (state.bonus) endTurn(state, seat); else releaseHold(state);
         events.push({ type: 'endTurn' });
       }

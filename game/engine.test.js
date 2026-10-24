@@ -288,4 +288,17 @@ assert(!E.canRedeal(s, 0));
     assert.deepStrictEqual(ev.find((x) => x.type === 'play').tile, [0, 1]);
   }
 }
+
+// Auto-juego cuando los rivales se saltan y el turno vuelve al mismo jugador (antes lanzaba "No hay turno retenido")
+{
+  const st = base([[[6, 6], [6, 2], [2, 2]], [[3, 4], [5, 5]]]);
+  E.play(st, 0, [6, 6], 'left'); E.releaseHold(st); // el asiento 1 se salta y el turno vuelve al 0
+  [E.playLowestValidTile, E.playRandomValidTile].forEach((fn) => {
+    const c = JSON.parse(JSON.stringify(st));
+    const ev = fn(c, 0); // juega [6,2] (no doble); el asiento 1 sigue sin jugada, así que vuelve a tocar al 0
+    assert.ok(ev.some((x) => x.type === 'play'));
+    assert.strictEqual(c.turn, 0);
+    assert.ok(!c.hold && !c.bonus);
+  });
+}
 console.log('OK');

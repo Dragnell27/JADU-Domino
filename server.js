@@ -49,6 +49,9 @@ app.use(express.static(STATIC_DIR, {
 const pid = () => crypto.randomBytes(4).toString('hex'); // id público estable de un jugador en su mesa
 const TURN_MS = (Number(process.env.TURN_SECONDS) || 20) * 1000; // tiempo por turno
 const rooms = new Map(); // id -> room
+
+// Los temporizadores corren fuera de los handlers de Socket.io: sin este guardia, una excepción tumbaría todo el servidor.
+const safe = (fn) => { try { fn(); } catch (e) { console.error('Error en temporizador:', e); } };
 let nextRoomId = 1;
 
 
@@ -77,7 +80,7 @@ function scheduleAuto(room) {
   const g = room.game;
   if (!g || g.status !== 'playing' || g.hold || !isAuto(room, g.turn)) return;
   const token = room.timerToken;
-  room.autoHandle = setTimeout(() => onTimeout(room, token, 'auto'), AUTO_PLAY_MS);
+  room.autoHandle = setTimeout(() => safe(() => onTimeout(room, token, 'auto')), AUTO_PLAY_MS);
 }
 
 function dealRoom(room) {
@@ -93,14 +96,14 @@ function maybeAutoNext(room) {
   const g = room.game;
   if (!g || g.status !== 'ended' || room.nextHandle || !isAuto(room, room.seats.indexOf(room.host))) return;
   const round = room.round;
-  room.nextHandle = setTimeout(() => {
+  room.nextHandle = setTimeout(() => safe(() => {
     room.nextHandle = null;
     if (!rooms.has(room.id) || room.round !== round || !room.game || room.game.status !== 'ended') return;
     if (!isAuto(room, room.seats.indexOf(room.host))) return;
     if (room.over && room.away && room.away[room.host]) return;
     if (room.over) { room.scores = Array(unitCount(room)).fill(0); room.over = null; }
     dealRoom(room);
-  }, AUTO_NEXT_MS);
+  }), AUTO_NEXT_MS);
 }
 
 // ---- Temporizador de turno: el servidor manda; los clientes solo dibujan la cuenta atrás ----
@@ -113,12 +116,12 @@ function armTimer(room) {
   if (!g || g.status !== 'playing') { room.turnEndsAt = null; return; }
   const token = room.timerToken;
   room.turnEndsAt = Date.now() + TURN_MS;
-  room.timerHandle = setTimeout(() => onTimeout(room, token), TURN_MS);
+  room.timerHandle = setTimeout(() => safe(() => onTimeout(room, token)), TURN_MS);
   // Doble sin segundo doble: el turno sigue visible en el mismo jugador, igual que si pudiera jugar otro.
   // Se cede tras una pausa aleatoria (0,5-1,2 s) parecida a la de quien decide, para que el tiempo tampoco delate.
   if (g.hold) {
     const delay = Math.min(500 + Math.random() * 700, TURN_MS * 0.6);
-    room.holdHandle = setTimeout(() => onHold(room, token), delay);
+    room.holdHandle = setTimeout(() => safe(() => onHold(room, token)), delay);
   }
   scheduleAuto(room);
 }
@@ -201,7 +204,8 @@ function roomView(room, socketId) {
 }
 
 function pushRoom(room) {
-  room.seats.forEach((id) => io.to(id).emit('room', roomView(room, id)));
+  // Los ausentes (salieron o se desconectaron) no reciben la mesa: si su socket sigue vivo, los devolvería al tablero.
+  room.seats.forEach((id) => { if (!(room.away && room.away[id])) io.to(id).emit('room', roomView(room, id)); });
 }
 const pushList = () => io.emit('rooms', roomList());
 
@@ -222,7 +226,7 @@ function closeRoom(room, notice) {
 }
 
 // Partida en curso: quien se va (cierra la pestaña, pierde conexión o pulsa Salir) conserva su asiento en modo automático
-// y, si fue por desconexión (no por pulsar Salir), puede volver con el mismo navegador (token). Los demás terminan la partida.
+// y puede volver con el mismo navegador (token), tanto si se desconectó como si pulsó Salir. Los demás terminan la partida.
 function markAway(room, socket, who, explicit) {
   const id = socket.id;
   room.away = room.away || {}; room.auto = room.auto || {};
@@ -232,11 +236,11 @@ function markAway(room, socket, who, explicit) {
   const others = humansOnline(room);
   if (room.host === id && others.length) room.host = others[0]; // el anfitrión pasa a un humano conectado
   if (others.length) {
-    others.forEach((o) => io.to(o).emit('notice', `${who} salió de la sala: juega en automático y puede volver`));
+    others.forEach((o) => io.to(o).emit('notice', `El jugador ${who} ha abandonado la partida. Su turno será controlado automáticamente.`));
   } else {
     room.emptyHandle = setTimeout(() => closeRoom(room), EMPTY_TABLE_MS); // nadie conectado: se espera a que vuelvan
   }
-  if (explicit) { room.gone = room.gone || {}; room.gone[id] = true; } // pulsó Salir: renuncia al asiento y no se le ofrece volver
+  if (explicit && socket.data.token) socket.emit('resume', { room: room.id }); // también tras Salir: aviso no bloqueante en el lobby
   scheduleAuto(room);
   maybeAutoNext(room);
   pushRoom(room);
@@ -277,6 +281,7 @@ function findResumable(token) {
 
 // El asiento pasa del socket antiguo al nuevo: todos los mapas de la mesa usan el id del socket como clave.
 function rekey(room, from, to) {
+  if (from === to) return; // salió con Salir y vuelve por el MISMO socket: nada que mover (copiar y borrar la misma clave borraba sus datos)
   ['names', 'avatars', 'pids', 'voice', 'auto', 'away', 'tokens', 'gone'].forEach((m) => {
     if (room[m] && from in room[m]) { room[m][to] = room[m][from]; delete room[m][from]; }
   });

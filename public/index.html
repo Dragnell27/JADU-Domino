@@ -41,17 +41,11 @@
     <p id="splashMsg">Conectando con la mesa…</p>
   </div>
   <div id="toast" hidden role="status" aria-live="polite"></div>
-    <div id="resume" hidden role="alertdialog" aria-modal="true" aria-labelledby="resumeTitle">
-      <div class="modal">
-        <div class="m-icon">🔌</div>
-        <h2 class="m-title" id="resumeTitle">Tienes una partida en curso</h2>
-        <p class="muted">Saliste de una mesa que sigue jugando (tus fichas las juega el modo automático).<br>¿Quieres volver a ella?</p>
-        <div class="m-actions">
-          <button id="resumeYes" class="btn-wood gold big">Volver a la partida</button>
-          <button id="resumeNo" class="btn-wood">No, descartar</button>
-        </div>
-      </div>
-    </div>
+    <div id="resume" hidden role="status" aria-live="polite">
+    <span class="rs-text">🔌 Tienes una partida en curso</span>
+    <button id="resumeYes" class="btn-wood gold">Volver</button>
+    <button id="resumeNo" class="btn-wood" aria-label="Descartar la partida en curso">Descartar</button>
+  </div>
 
   <div id="audioHud">
     <button id="leaveGame" class="hud-btn" aria-label="Salir" title="Salir"><span class="ico" data-icon="exit"></span></button>
