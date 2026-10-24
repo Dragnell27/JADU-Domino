@@ -1,0 +1,14 @@
+# Blueprint de Render: crea el servicio web gratuito al conectar el repositorio.
+services:
+  - type: web
+    name: jadu-domino
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node server.js --dist
+    healthCheckPath: /robots.txt
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: TURN_SECONDS
+        value: 20
