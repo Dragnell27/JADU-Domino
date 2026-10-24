@@ -12,9 +12,10 @@
   "dependencies": {
     "compression": "^1.8.2",
     "express": "^4.19.2",
-    "socket.io": "^4.7.5"
-  },
-  "devDependencies": {
+    "socket.io": "^4.7.5",
     "esbuild": "^0.28.2"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

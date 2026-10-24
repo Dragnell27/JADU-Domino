@@ -743,3 +743,7 @@ body:not(.registered) #leaveGame { display: none; } /* oculto en la pantalla de 
 /* Las filas de avatares conservan su alto natural (antes se aplastaban al encoger la lista); sobra → scroll interno */
 #avatarGrid { grid-auto-rows: max-content; align-content: start; }
 #avatarGrid .av-opt { min-height: max-content; }
+
+/* El aviso conserva su centrado durante la animación de entrada (con "pop" saltaba hacia la derecha un instante) */
+#toast { animation: toastIn .25s var(--ease); }
+@keyframes toastIn { from { transform: translateX(-50%) scale(.9); opacity: 0; } }

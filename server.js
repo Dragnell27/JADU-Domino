@@ -278,6 +278,7 @@ function findResumable(token) {
 
 // El asiento pasa del socket antiguo al nuevo: todos los mapas de la mesa usan el id del socket como clave.
 function rekey(room, from, to) {
+  if (from === to) return; // salió con Salir y vuelve por el MISMO socket: nada que mover (copiar y borrar la misma clave borraba sus datos)
   ['names', 'avatars', 'pids', 'voice', 'auto', 'away', 'tokens', 'gone'].forEach((m) => {
     if (room[m] && from in room[m]) { room[m][to] = room[m][from]; delete room[m][from]; }
   });
