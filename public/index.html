@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#0b5a3c">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="JADU Domino">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="canonical" href="__ORIGIN__/">
+  <title>JADU Domino - Multijugador en Tiempo Real</title>
+  <meta name="description" content="JADU Domino: dominó online en tiempo real para 2, 3 o 4 jugadores: mesa individual o por parejas, chat de texto y de voz, modo automático y partidas hasta el puntaje que elijas. Gratis y sin descargas.">
+  <meta name="keywords" content="JADU Domino, dominó online, dominó multijugador, jugar dominó con amigos, dominó por parejas, juego de mesa online, dominó gratis">
+  <meta name="author" content="JADU Domino">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="JADU Domino">
+  <meta property="og:locale" content="es_ES">
+  <meta property="og:title" content="JADU Domino - Multijugador en Tiempo Real">
+  <meta property="og:description" content="Mesas de 2 a 4 jugadores, por parejas o individual, con chat de voz. ¡Crea una mesa y comparte el enlace!">
+  <meta property="og:url" content="__ORIGIN__/">
+  <meta property="og:image" content="__ORIGIN__/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Fichas de dominó sobre un paño verde con el título JADU Domino">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="JADU Domino - Multijugador en Tiempo Real">
+  <meta name="twitter:description" content="Mesas de 2 a 4 jugadores, por parejas o individual, con chat de voz.">
+  <meta name="twitter:image" content="__ORIGIN__/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"JADU Domino","description":"Dominó multijugador en tiempo real para 2 a 4 jugadores.","url":"__ORIGIN__/","image":"__ORIGIN__/og-image.png","inLanguage":"es","genre":"Juego de mesa","playMode":"MultiPlayer","numberOfPlayers":{"@type":"QuantitativeValue","minValue":2,"maxValue":4},"applicationCategory":"Game","operatingSystem":"Web"}</script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="splash" role="status" aria-live="polite">
+    <div class="splash-tile" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <h1>JADU Domino</h1>
+    <p id="splashMsg">Conectando con la mesa…</p>
+  </div>
+  <div id="toast" hidden role="status" aria-live="polite"></div>
+    <div id="resume" hidden role="alertdialog" aria-modal="true" aria-labelledby="resumeTitle">
+      <div class="modal">
+        <div class="m-icon">🔌</div>
+        <h2 class="m-title" id="resumeTitle">Tienes una partida en curso</h2>
+        <p class="muted">Saliste de una mesa que sigue jugando (tus fichas las juega el modo automático).<br>¿Quieres volver a ella?</p>
+        <div class="m-actions">
+          <button id="resumeYes" class="btn-wood gold big">Volver a la partida</button>
+          <button id="resumeNo" class="btn-wood">No, descartar</button>
+        </div>
+      </div>
+    </div>
+
+  <div id="audioHud">
+    <button id="leaveGame" class="hud-btn" aria-label="Salir" title="Salir"><span class="ico" data-icon="exit"></span></button>
+    <button id="micBtn" class="hud-btn room-only" data-state="off" aria-label="Unirse al chat de voz" title="Unirse al chat de voz"><span class="ico" data-icon="mic"></span></button>
+    <button id="chatBtn" class="hud-btn room-only" aria-label="Chat de la mesa" title="Chat de la mesa"><span class="ico" data-icon="chat"></span><span id="chatBadge" hidden>0</span></button>
+    <button id="installBtn" class="hud-btn" aria-label="Instalar app" title="Instalar app" hidden><span class="ico" data-icon="download"></span></button>
+    <button id="fsBtn" class="hud-btn" aria-label="Pantalla completa" title="Pantalla completa" hidden><span class="ico" data-icon="expand"></span></button>
+    <button id="muteBtn" class="hud-btn" aria-label="Silenciar todo" title="Silenciar / activar sonido"><span class="ico" data-icon="speaker"></span></button>
+    <button id="audioMenuBtn" class="hud-btn" aria-label="Preferencias de audio" aria-haspopup="true" title="Preferencias de audio"><span class="ico" data-icon="gear"></span></button>
+    <div id="audioMenu" role="radiogroup" aria-label="Preferencias de audio" hidden>
+      <div class="menu-brand" aria-hidden="true">JADU Domino</div>
+      <button data-mode="full" role="radio"><span>🔊</span> Audio completo<small>Música + efectos</small></button>
+      <button data-mode="sfx" role="radio"><span>🎲</span> Solo sonidos de fichas<small>Sin música</small></button>
+      <button data-mode="bgm" role="radio"><span>🎵</span> Solo música de fondo<small>Sin efectos</small></button>
+      <button data-mode="off" role="radio"><span>🔇</span> Silencio<small>Todo apagado</small></button>
+    </div>
+  </div>
+
+  <aside id="chat" hidden aria-label="Chat de la mesa">
+    <header>
+      <b>💬 Chat de la mesa</b>
+      <button id="chatClose" class="x" aria-label="Cerrar chat">✕</button>
+    </header>
+    <div class="voice-row">
+      <span id="voiceStatus">Voz desactivada</span>
+      <button id="voiceLeave" class="mini" hidden>Salir de la voz</button>
+    </div>
+    <ul id="chatList" role="log" aria-live="polite" aria-label="Mensajes del chat"></ul>
+    <div id="chatQuick">
+      <button type="button">👍</button><button type="button">😂</button><button type="button">¡Buena jugada!</button>
+      <button type="button">Apúrate ⏰</button><button type="button">¡Gracias!</button>
+    </div>
+    <form id="chatForm">
+      <input id="chatInput" maxlength="200" placeholder="Escribe un mensaje…" autocomplete="off">
+      <button class="btn-wood gold">Enviar</button>
+    </form>
+  </aside>
+
+  <div id="rotate" hidden>
+    <div class="phone">📱</div>
+    <h3>Gira tu teléfono</h3>
+    <p>El dominó se juega mejor en horizontal: el paño es más ancho y las fichas se ven más grandes.</p>
+    <button id="rotateFs" class="primary">Pantalla completa</button>
+    <button id="rotateOk" class="ghost">Seguir en vertical</button>
+  </div>
+
+  <section id="login" class="card center">
+    <h1 class="brand"><span>JADU</span> Domino</h1>
+    <p class="muted">Juega en línea con tus amigos</p>
+    <form id="nameForm">
+      <input id="nameInput" maxlength="20" placeholder="Tu nombre de usuario" autofocus autocomplete="off">
+
+      <h3 class="pick-title">Elige tu avatar</h3>
+      <div id="avatarGrid" class="avatar-grid" role="radiogroup" aria-label="Avatar"></div>
+      <p class="muted" id="avatarHint">Si no eliges, te toca uno al azar</p>
+
+      <button class="btn-wood gold big">Entrar</button>
+    </form>
+  </section>
+
+  <section id="lobby" class="card" hidden>
+    <h2>Hola, <span id="who"></span></h2>
+
+    <h3>Nueva mesa</h3>
+    <form id="createForm">
+      <div class="opts" role="radiogroup" aria-label="Jugadores">
+        <label class="opt"><input type="radio" name="players" value="2">
+          <span class="opt-body"><span class="opt-icon">👤👤</span><b>2</b><small>jugadores</small></span></label>
+        <label class="opt"><input type="radio" name="players" value="3">
+          <span class="opt-body"><span class="opt-icon">👤👤👤</span><b>3</b><small>jugadores</small></span></label>
+        <label class="opt"><input type="radio" name="players" value="4" checked>
+          <span class="opt-body"><span class="opt-icon">👥👥</span><b>4</b><small>jugadores</small></span></label>
+      </div>
+
+      <div class="opts modes" id="modes" role="radiogroup" aria-label="Modalidad">
+        <label class="opt"><input type="radio" name="mode" value="individual" checked>
+          <span class="opt-body"><span class="opt-icon">🧍</span><b>Individual</b><small>todos contra todos</small></span></label>
+        <label class="opt"><input type="radio" name="mode" value="teams">
+          <span class="opt-body"><span class="opt-icon">🤝</span><b>Parejas</b><small>1·3 contra 2·4</small></span></label>
+      </div>
+      <p class="muted" id="modeHint" hidden>Las parejas solo están disponibles con 4 jugadores.</p>
+
+      <div class="target">
+        <label for="cfgTarget">Objetivo de mesa: <b id="targetVal">100</b> pts</label>
+        <input id="cfgTarget" type="range" min="50" max="500" step="50" value="100">
+        <div class="ticks"><span>50</span><span>250</span><span>500</span></div>
+      </div>
+
+      <button class="primary wide">Crear mesa</button>
+    </form>
+
+    <h3>Mesas abiertas</h3>
+    <ul id="roomList"></ul>
+  </section>
+
+  <section id="waiting" class="card" hidden>
+    <header class="w-head">
+      <h2>Mesa <span id="wId"></span></h2>
+      <div id="wInfo" class="chips"></div>
+    </header>
+    <div id="wSeats" class="seat-grid"></div>
+    <p id="wHint" class="muted center"></p>
+    <div class="w-actions">
+      <button id="startBtn" class="btn-wood gold">Iniciar partida</button>
+      <button id="leaveWait" class="btn-wood">Salir</button>
+    </div>
+  </section>
+
+  <section id="table" hidden>
+    <header>
+      <div id="status"></div>
+    </header>
+    <div id="arena">
+      <div class="seat top" id="seat-top" hidden></div>
+      <div class="seat left" id="seat-left" hidden></div>
+      <div id="board"><div id="chain"></div></div>
+      <div class="seat right" id="seat-right" hidden></div>
+      <div id="pozo" hidden role="button" tabindex="0" aria-label="Pozo de fichas">
+        <div class="pozo-stack"><i></i><i></i><i></i></div>
+        <div class="pozo-count" id="pozoCount">0</div>
+        <div class="pozo-label">Pozo</div>
+        <div class="pozo-hint" id="pozoHint" hidden>Arrastra a tu mano</div>
+      </div>
+      <div id="pozoModal" hidden role="dialog" aria-modal="true" aria-label="Robar del pozo">
+        <div class="pz-panel">
+          <h3>Sin jugada: roba del pozo</h3>
+          <p class="muted"><span id="pozoModalCount"></span> · <b id="pozoSec"></b></p>
+          <div id="pozoGrid"></div>
+        </div>
+      </div>
+      <div id="me">
+        <div id="meCard"></div>
+        <div id="actions"></div>
+        <div id="hand" class="player-hand"></div>
+      </div>
+    </div>
+    <div id="blocked" hidden><h2>¡Juego trancado!</h2><p>Calculando puntos…</p></div>
+    <div id="badhand" hidden role="alertdialog" aria-modal="true" aria-labelledby="badTitle">
+      <div class="modal">
+        <div class="m-icon">😬</div>
+        <h2 class="m-title" id="badTitle">¡Mano mala!</h2>
+        <p class="m-sub" id="badText"></p>
+        <p class="muted">Si reinicias, se mostrarán las manos de todos y se barajará de nuevo.<br>Si juegas tu turno, ya no podrás reiniciar esta ronda.</p>
+        <div class="m-actions">
+          <button id="badRestart" class="btn-wood gold big">🔄 Reiniciar ronda</button>
+          <button id="badKeep" class="btn-wood">Continuar jugando</button>
+        </div>
+      </div>
+    </div>
+    <div id="result" hidden role="dialog" aria-live="polite" aria-label="Resultado de la ronda"></div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="icons.js"></script>
+  <script src="audio.js"></script>
+  <script src="avatars.js"></script>
+  <script src="layout.js"></script>
+  <script src="messages.js"></script>
+  <script src="client.js"></script>
+  <script src="social.js"></script>
+</body>
+</html>
