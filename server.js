@@ -201,7 +201,8 @@ function roomView(room, socketId) {
 }
 
 function pushRoom(room) {
-  room.seats.forEach((id) => io.to(id).emit('room', roomView(room, id)));
+  // Los ausentes (salieron o se desconectaron) no reciben la mesa: si su socket sigue vivo, los devolvería al tablero.
+  room.seats.forEach((id) => { if (!(room.away && room.away[id])) io.to(id).emit('room', roomView(room, id)); });
 }
 const pushList = () => io.emit('rooms', roomList());
 
@@ -222,7 +223,7 @@ function closeRoom(room, notice) {
 }
 
 // Partida en curso: quien se va (cierra la pestaña, pierde conexión o pulsa Salir) conserva su asiento en modo automático
-// y, si fue por desconexión (no por pulsar Salir), puede volver con el mismo navegador (token). Los demás terminan la partida.
+// y puede volver con el mismo navegador (token), tanto si se desconectó como si pulsó Salir. Los demás terminan la partida.
 function markAway(room, socket, who, explicit) {
   const id = socket.id;
   room.away = room.away || {}; room.auto = room.auto || {};
@@ -232,11 +233,11 @@ function markAway(room, socket, who, explicit) {
   const others = humansOnline(room);
   if (room.host === id && others.length) room.host = others[0]; // el anfitrión pasa a un humano conectado
   if (others.length) {
-    others.forEach((o) => io.to(o).emit('notice', `${who} salió de la sala: juega en automático y puede volver`));
+    others.forEach((o) => io.to(o).emit('notice', `El jugador ${who} ha abandonado la partida. Su turno será controlado automáticamente.`));
   } else {
     room.emptyHandle = setTimeout(() => closeRoom(room), EMPTY_TABLE_MS); // nadie conectado: se espera a que vuelvan
   }
-  if (explicit) { room.gone = room.gone || {}; room.gone[id] = true; } // pulsó Salir: renuncia al asiento y no se le ofrece volver
+  if (explicit && socket.data.token) socket.emit('resume', { room: room.id }); // también tras Salir: aviso no bloqueante en el lobby
   scheduleAuto(room);
   maybeAutoNext(room);
   pushRoom(room);

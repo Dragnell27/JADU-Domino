@@ -90,7 +90,7 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 
 **Abandono y reconexión**
 - Si un jugador cierra la pestaña, pierde conexión o pulsa **Salir** en plena partida, su asiento pasa a **modo automático** y los demás terminan la partida.
-- Si fue por desconexión (no por pulsar Salir) y vuelve con el mismo navegador, se le ofrece **volver a la partida** (recupera su mano y se apaga el automático) o descartarla. Quien pulsa **Salir** renuncia al asiento y no se le ofrece volver.
+- Si vuelve con el mismo navegador, se le ofrece **volver a la partida** (recupera su mano y se apaga el automático) o descartarla. También se ofrece volver a quien pulsó **Salir** (un aviso pequeño que no bloquea la pantalla).
 - Si el anfitrión se va, el cargo pasa a un jugador conectado. Si no queda ningún humano conectado, la mesa se cierra a los 5 minutos.
 - En la sala de espera (antes de empezar) salir libera el lugar; si sale el anfitrión, la mesa se cierra.
 

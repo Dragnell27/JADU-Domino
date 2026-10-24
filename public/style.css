@@ -698,10 +698,13 @@ body:not(.registered) #leaveGame { display: none; } /* oculto en la pantalla de 
 /* Táctil: el :hover "pegado" tras un toque no debe dejar la ficha del pozo levantada/resaltada */
 @media (hover: none) { .pz-tile:hover { transform: none; outline: none; } .pz-tile:active { transform: translateY(-6px); } }
 
-/* Oferta de volver a una partida en curso */
-#resume { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; padding: var(--space);
-  background: #000b; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+/* Oferta de volver a una partida en curso: aviso compacto que NO bloquea la pantalla (se puede ignorar) */
+#resume { position: fixed; left: 50%; bottom: calc(14px + var(--safe-b, 0px)); transform: translateX(-50%); z-index: 130; display: flex; align-items: center; gap: .6rem;
+  max-width: calc(100vw - 24px); padding: .5rem .7rem; border-radius: 14px; background: linear-gradient(#4a2c16, #2c190c); border: 2px solid var(--gold, #f2c14e); box-shadow: 0 8px 22px #000b; animation: pop .25s var(--ease); }
 #resume[hidden] { display: none; }
+#resume .rs-text { font-weight: 700; font-size: .9rem; }
+#resume .btn-wood { padding: .4rem .8rem; font-size: .85rem; min-height: 38px; }
+@media (max-width: 480px) { #resume { flex-wrap: wrap; justify-content: center; } }
 
 /* ---------- Pantalla de carga (splash) ---------- */
 #splash { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .8rem;
