@@ -89,8 +89,8 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 - **Modo automático (interruptor ON/OFF):** mientras esté activo, el servidor juega una **ficha válida al azar** en cada uno de tus turnos y resuelve el robo del pozo por ti. Si el anfitrión lo tiene activo, la siguiente ronda o partida empieza sola.
 
 **Abandono y reconexión**
-- Si un jugador cierra la pestaña, pierde conexión o pulsa **Salir** en plena partida, conserva su asiento en **modo automático** y los demás terminan la partida.
-- Si esa persona vuelve con el mismo navegador, se le ofrece **volver a la partida** (recupera su mano y se apaga el automático) o descartarla.
+- Si un jugador cierra la pestaña, pierde conexión o pulsa **Salir** en plena partida, su asiento pasa a **modo automático** y los demás terminan la partida.
+- Si fue por desconexión (no por pulsar Salir) y vuelve con el mismo navegador, se le ofrece **volver a la partida** (recupera su mano y se apaga el automático) o descartarla. Quien pulsa **Salir** renuncia al asiento y no se le ofrece volver.
 - Si el anfitrión se va, el cargo pasa a un jugador conectado. Si no queda ningún humano conectado, la mesa se cierra a los 5 minutos.
 - En la sala de espera (antes de empezar) salir libera el lugar; si sale el anfitrión, la mesa se cierra.
 

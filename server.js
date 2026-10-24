@@ -222,7 +222,7 @@ function closeRoom(room, notice) {
 }
 
 // Partida en curso: quien se va (cierra la pestaña, pierde conexión o pulsa Salir) conserva su asiento en modo automático
-// y puede volver con el mismo navegador (token). Los demás terminan la partida.
+// y, si fue por desconexión (no por pulsar Salir), puede volver con el mismo navegador (token). Los demás terminan la partida.
 function markAway(room, socket, who, explicit) {
   const id = socket.id;
   room.away = room.away || {}; room.auto = room.auto || {};
@@ -236,7 +236,7 @@ function markAway(room, socket, who, explicit) {
   } else {
     room.emptyHandle = setTimeout(() => closeRoom(room), EMPTY_TABLE_MS); // nadie conectado: se espera a que vuelvan
   }
-  if (explicit && socket.data.token) socket.emit('resume', { room: room.id }); // puede cambiar de idea y volver
+  if (explicit) { room.gone = room.gone || {}; room.gone[id] = true; } // pulsó Salir: renuncia al asiento y no se le ofrece volver
   scheduleAuto(room);
   maybeAutoNext(room);
   pushRoom(room);
