@@ -721,3 +721,22 @@ body:not(.registered) #leaveGame { display: none; } /* oculto en la pantalla de 
   filter: drop-shadow(0 3px 0 #5a3a1c); text-shadow: none; }
 @media (orientation: landscape) and (max-height: 520px) { #login h1.brand { font-size: clamp(1.6rem, 5vw, 2.2rem); } }
 .menu-brand { padding: .3rem .8rem .5rem; font: 700 .85rem Georgia, serif; letter-spacing: 2px; color: var(--gold, #f2c14e); text-align: center; border-bottom: 1px solid #ffffff22; }
+
+/* Selector de avatares: con 20 opciones la lista se desplaza dentro de su propio recuadro y el resto de la tarjeta no se mueve */
+.avatar-grid { max-height: clamp(150px, 28dvh, 220px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: .2rem .35rem .2rem .2rem; }
+@media (orientation: landscape) and (max-height: 520px) { .avatar-grid { max-height: clamp(52px, 17dvh, 76px); } }
+
+/* Pantalla de acceso: se ajusta a la altura disponible. La tarjeta no hace scroll; solo la lista de avatares absorbe el espacio sobrante */
+#login { display: flex; flex-direction: column; overflow: hidden; }
+#login:not([hidden]) { display: flex; }
+#login h1.brand { font-size: clamp(1.7rem, min(6vw + .8rem, 9dvh), 3.8rem); }
+#login .muted { flex: none; }
+#nameForm { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+#nameForm > * { flex: none; }
+#nameForm #avatarGrid { flex: 0 1 auto; min-height: 64px; max-height: none; }
+@media (orientation: landscape) and (max-height: 520px) { #nameForm #avatarGrid { max-height: none; min-height: 52px; } }
+/* Deja libre la franja de botones del HUD sobre la tarjeta de acceso */
+#login { margin-top: 56px; max-height: calc(var(--vh) - 2 * var(--space) - var(--safe-t) - var(--safe-b) - 56px); }
+/* Las filas de avatares conservan su alto natural (antes se aplastaban al encoger la lista); sobra → scroll interno */
+#avatarGrid { grid-auto-rows: max-content; align-content: start; }
+#avatarGrid .av-opt { min-height: max-content; }

@@ -11,6 +11,16 @@
     { id: 'rana', emoji: '🐸', name: 'Rana' },
     { id: 'mono', emoji: '🐵', name: 'Mono' },
     { id: 'pinguino', emoji: '🐧', name: 'Pingüino' },
+    { id: 'gato', emoji: '🐱', name: 'Gato' },
+    { id: 'perro', emoji: '🐶', name: 'Perro' },
+    { id: 'conejo', emoji: '🐰', name: 'Conejo' },
+    { id: 'oso', emoji: '🐻', name: 'Oso' },
+    { id: 'koala', emoji: '🐨', name: 'Koala' },
+    { id: 'dragon', emoji: '🐲', name: 'Dragón' },
+    { id: 'lobo', emoji: '🐺', name: 'Lobo' },
+    { id: 'delfin', emoji: '🐬', name: 'Delfín' },
+    { id: 'aguila', emoji: '🦅', name: 'Águila' },
+    { id: 'dinosaurio', emoji: '🦖', name: 'Dinosaurio' },
   ];
   const byId = (id) => AVATARS.find((a) => a.id === id);
   const random = () => AVATARS[Math.floor(Math.random() * AVATARS.length)].id;
