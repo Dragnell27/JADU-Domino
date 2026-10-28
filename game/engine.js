@@ -57,6 +57,7 @@ function newRound(numPlayers, mode, opts = {}) {
     skipped: [], // asientos saltados en el último cambio de turno (pozo vacío y sin jugada)
     boneyard: deck, // 2 jugadores: 14 fichas; 3 jugadores: 7; 4 jugadores: 0
     board: [],
+    pend: { left: 0, right: 0, open: false }, // dobles de este turno aún no mostrados a los demás (ver publicBoard)
     hold: false, // turno retenido tras un doble sin otro doble: evita delatar la mano (ver play)
     bonus: false, // true: acaba de jugar un doble y puede jugar otro doble en el mismo turno
     origin: 0, // índice en board de la primera ficha jugada (ancla del paño)
@@ -67,6 +68,19 @@ function newRound(numPlayers, mode, opts = {}) {
 }
 
 // Movimientos legales del asiento. Con tablero vacío (salida) puede jugar cualquier ficha.
+const pendOf = (state) => state.pend || (state.pend = { left: 0, right: 0, open: false });
+const clearPend = (state) => { state.pend = { left: 0, right: 0, open: false }; };
+
+// Lo que ven los DEMÁS jugadores: sin los dobles del turno en curso (aún no decididos) y con las fichas en mano
+// de quien los jugó sin descontar, para que no se note si tiene otro doble. Quien juega ve todo.
+function publicBoard(state) {
+  const p = pendOf(state);
+  const hidden = p.left + p.right + (p.open ? 1 : 0);
+  if (!hidden) return { board: state.board, origin: state.origin, hidden: 0 };
+  if (p.open) return { board: [], origin: 0, hidden }; // todo lo que hay en la mesa se jugó en este turno
+  return { board: state.board.slice(p.left, state.board.length - p.right), origin: state.origin - p.left, hidden };
+}
+
 function legalMoves(state, seat) {
   const hand = state.bonus ? state.hands[seat].filter(isDouble) : state.hands[seat];
   const e = ends(state.board);
@@ -112,6 +126,11 @@ function play(state, seat, tile, side) {
   hand.splice(idx, 1);
   if (side === 'left' && e) { state.board.unshift(placed); state.origin++; }
   else state.board.push(placed);
+  // Privacidad: un doble no se muestra a los demás hasta que su dueño decide si juega otro doble o cierra el turno.
+  if (isDouble(placed)) {
+    const p = pendOf(state);
+    if (!e) p.open = true; else if (side === 'left') p.left++; else p.right++;
+  }
 
   if (hand.length === 0) return finish(state, 'domino', seat);
   // Regla de la casa: tras un doble, si tienes otro doble que encaje, puedes jugarlo en el mismo turno.
@@ -148,6 +167,7 @@ function hasMove(state, seat) {
 // Pasa el turno. Si el pozo está vacío y el siguiente no tiene jugada, lo salta solo: no hay nada que
 // robar ni que jugar, así que nadie tiene que pulsar "pasar". Si nadie puede jugar, es tranca (antes).
 function advance(state, seat) {
+  clearPend(state); // turno resuelto: los dobles pendientes ya se muestran a todos
   state.skipped = [];
   if (checkGameBlocked(state)) return finish(state, 'blocked', null);
   let next = (seat + 1) % state.numPlayers;
@@ -210,6 +230,7 @@ const unitOf = (state, seat) => (state.mode === 'teams' ? seat % 2 : seat);
 // combinada) con menos puntos y recibe: puntos de los rivales - puntos propios en mano.
 // Empate exacto: según tieRule, gana quien salió ('starter') o nadie suma ('none').
 function finish(state, reason, dominoSeat) {
+  clearPend(state);
   state.status = 'ended';
   state.bonus = false;
   state.hold = false;
@@ -341,4 +362,4 @@ const playLowestValidTile = (state, seat) => autoMove(state, seat, lowestMove);
 // Modo automático activado: ficha válida al azar.
 const playRandomValidTile = (state, seat) => autoMove(state, seat, randomMove);
 
-module.exports = { playLowestValidTile, playRandomValidTile, randomMove, canRedeal, redeal, doubleCount, releaseHold, lowestMove, autoMove, normalizeTarget, matchWinner, newRound, legalMoves, checkGameBlocked, play, draw, pass, endTurn, ends, handPips, unitOf, findStarter, fullSet };
+module.exports = { publicBoard, playLowestValidTile, playRandomValidTile, randomMove, canRedeal, redeal, doubleCount, releaseHold, lowestMove, autoMove, normalizeTarget, matchWinner, newRound, legalMoves, checkGameBlocked, play, draw, pass, endTurn, ends, handPips, unitOf, findStarter, fullSet };

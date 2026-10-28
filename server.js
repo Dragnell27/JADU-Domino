@@ -52,7 +52,16 @@ const rooms = new Map(); // id -> room
 
 // Los temporizadores corren fuera de los handlers de Socket.io: sin este guardia, una excepción tumbaría todo el servidor.
 const safe = (fn) => { try { fn(); } catch (e) { console.error('Error en temporizador:', e); } };
-let nextRoomId = 1;
+// Código de mesa: 5 caracteres sin letras/números que se confunden (0/O, 1/I/L). Se comparte para entrar.
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function newRoomCode() {
+  for (;;) {
+    let c = '';
+    for (let i = 0; i < 5; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
+    if (!rooms.has(c)) return c;
+  }
+}
+const normCode = (v) => String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 
 // ---- Puntos de la mesa tras terminar una ronda (se llama una sola vez por ronda) ----
@@ -154,18 +163,6 @@ function unitCount(room) {
   return room.config.mode === 'teams' ? 2 : room.config.players;
 }
 
-function roomList() {
-  return [...rooms.values()].filter((r) => r.seats.some((id) => !(r.away && r.away[id]))).map((r) => ({
-    id: r.id,
-    host: r.names[r.host],
-    players: r.config.players,
-    mode: r.config.mode,
-    target: r.config.target,
-    seated: r.seats.length,
-    inGame: !!r.game,
-  }));
-}
-
 // Vista personalizada: cada jugador solo ve su propia mano.
 function roomView(room, socketId) {
   const me = room.seats.indexOf(socketId);
@@ -180,13 +177,21 @@ function roomView(room, socketId) {
     pids: room.seats.map((id) => room.pids[id]),
     voice: room.seats.map((id) => room.voice[id] || null),
     auto: room.seats.map((id) => !!(room.auto && room.auto[id])),
+    spectator: me < 0, // observa: ve la mesa pero no juega ni ve manos
+    myPid: room.pids[socketId],
+    specs: (room.spectators || []).map((id) => ({ name: room.names[id], avatar: room.avatars[id], pid: room.pids[id] })),
+    // Todos los que pueden hablar por voz (jugadores y observadores), con su estado
+    people: everyone(room).map((id) => ({ pid: room.pids[id], voice: room.voice[id] || null })),
     away: room.seats.map((id) => !!(room.away && room.away[id])), // desconectados (juegan en automático y pueden volver)
     scores: room.scores,
     over: room.over || null,
     round: room.round || 0,
-    game: g && {
-      board: g.board,
-      origin: g.origin,
+    game: g && (() => {
+      // Los dobles del turno en curso se ocultan a los demás hasta que se resuelva (no delatan un segundo doble)
+      const pub = me === g.turn ? { board: g.board, origin: g.origin, hidden: 0 } : engine.publicBoard(g);
+      return {
+      board: pub.board,
+      origin: pub.origin,
       // Información privada: solo el jugador en turno sabe si puede jugar otro doble (o si solo está cediendo el turno)
       bonus: g.bonus && me === g.turn,
       holding: g.hold && me === g.turn,
@@ -195,28 +200,36 @@ function roomView(room, socketId) {
       status: g.status,
       result: g.result,
       boneyard: g.boneyard.length,
-      counts: g.hands.map((h) => h.length),
+      counts: g.hands.map((h, i) => h.length + (i === g.turn && me !== g.turn ? pub.hidden : 0)),
       hand: me >= 0 ? g.hands[me] : [],
       moves: me >= 0 && g.status === 'playing' && g.turn === me && !g.hold ? engine.legalMoves(g, me) : [],
       timer: g.status === 'playing' && room.turnEndsAt ? { endsAt: room.turnEndsAt, now: Date.now(), total: TURN_MS } : null,
-    },
+      };
+    })(),
   };
 }
 
 function pushRoom(room) {
   // Los ausentes (salieron o se desconectaron) no reciben la mesa: si su socket sigue vivo, los devolvería al tablero.
-  room.seats.forEach((id) => { if (!(room.away && room.away[id])) io.to(id).emit('room', roomView(room, id)); });
+  everyone(room).forEach((id) => { if (!(room.away && room.away[id])) io.to(id).emit('room', roomView(room, id)); });
 }
-const pushList = () => io.emit('rooms', roomList());
+const pushList = () => {}; // las mesas ya no son públicas: se entra con código (no hay lista de mesas)
 
 const EMPTY_TABLE_MS = 5 * 60 * 1000; // sin humanos conectados, la mesa se cierra tras este tiempo
+const MAX_SPECTATORS = 20;
+// Expulsados: se vetan por código del navegador (o por conexión si no lo tienen) para que no vuelvan a entrar a esa mesa.
+const banKey = (socket) => socket.data.token || socket.id;
+const isBanned = (room, socket) => !!(room.banned && room.banned.includes(banKey(socket)));
+const isSpectator = (room, id) => !!(room.spectators && room.spectators.includes(id));
+// Todos los que están en la mesa (jugadores + observadores): para chat, voz y avisos.
+const everyone = (room) => [...room.seats, ...(room.spectators || [])];
 const humansOnline = (room) => room.seats.filter((id) => !(room.away && room.away[id]));
 
 function closeRoom(room, notice) {
   ['timerHandle', 'holdHandle', 'autoHandle', 'nextHandle', 'emptyHandle'].forEach((h) => clearTimeout(room[h]));
   room.game = null; // cualquier temporizador pendiente queda sin efecto
   rooms.delete(room.id);
-  room.seats.forEach((id) => {
+  everyone(room).forEach((id) => {
     const s = io.sockets.sockets.get(id);
     if (s && s.data.roomId === room.id) {
       s.leave(room.id); s.data.roomId = null; s.emit('room', null);
@@ -227,7 +240,7 @@ function closeRoom(room, notice) {
 
 // Partida en curso: quien se va (cierra la pestaña, pierde conexión o pulsa Salir) conserva su asiento en modo automático
 // y puede volver con el mismo navegador (token), tanto si se desconectó como si pulsó Salir. Los demás terminan la partida.
-function markAway(room, socket, who, explicit) {
+function markAway(room, socket, who, explicit, msg) {
   const id = socket.id;
   room.away = room.away || {}; room.auto = room.auto || {};
   room.away[id] = true;
@@ -236,7 +249,7 @@ function markAway(room, socket, who, explicit) {
   const others = humansOnline(room);
   if (room.host === id && others.length) room.host = others[0]; // el anfitrión pasa a un humano conectado
   if (others.length) {
-    others.forEach((o) => io.to(o).emit('notice', `El jugador ${who} ha abandonado la partida. Su turno será controlado automáticamente.`));
+    others.forEach((o) => io.to(o).emit('notice', msg || `El jugador ${who} ha abandonado la partida. Su turno será controlado automáticamente.`));
   } else {
     room.emptyHandle = setTimeout(() => closeRoom(room), EMPTY_TABLE_MS); // nadie conectado: se espera a que vuelvan
   }
@@ -253,6 +266,13 @@ function leave(socket, explicit) {
   socket.leave(room.id);
   socket.data.roomId = null;
   socket.emit('room', null); // el que sale vuelve al lobby
+  if (isSpectator(room, socket.id)) { // un observador se va: la partida no se entera
+    room.spectators = room.spectators.filter((id) => id !== socket.id);
+    ['names', 'avatars', 'pids', 'voice', 'tokens'].forEach((m) => { if (room[m]) delete room[m][socket.id]; });
+    pushRoom(room);
+    pushList();
+    return;
+  }
   if (room.game) {
     markAway(room, socket, who, explicit);
   } else if (room.host === socket.id) {
@@ -312,7 +332,6 @@ io.on('connection', (socket) => {
     socket.data.avatar = Avatars.byId(avatar) ? avatar : Avatars.random(); // valida contra el catálogo
     if (typeof token === 'string' && /^[\w-]{8,64}$/.test(token)) socket.data.token = token;
     socket.emit('named', name);
-    socket.emit('rooms', roomList());
     const r = findResumable(socket.data.token);
     if (r && !socket.data.roomId) socket.emit('resume', { room: r.room.id }); // ¿volver a su partida?
   });
@@ -324,7 +343,7 @@ io.on('connection', (socket) => {
     if (![2, 3, 4].includes(players)) throw new Error('Jugadores: 2, 3 o 4');
     mode = players === 4 && mode === 'teams' ? 'teams' : 'individual';
     const room = {
-      id: String(nextRoomId++), host: socket.id, config: { players, mode, target: engine.normalizeTarget(target) },
+      id: newRoomCode(), host: socket.id, config: { players, mode, target: engine.normalizeTarget(target) },
       seats: [socket.id], names: { [socket.id]: socket.data.name }, avatars: { [socket.id]: socket.data.avatar }, pids: { [socket.id]: pid() }, tokens: { [socket.id]: socket.data.token }, away: {}, gone: {}, voice: {}, chat: [], scores: [], game: null,
     };
     room.scores = Array(unitCount(room)).fill(0);
@@ -338,9 +357,10 @@ io.on('connection', (socket) => {
   on('joinRoom', ({ id }) => {
     if (!socket.data.name) throw new Error('Primero ingresa tu nombre');
     if (socket.data.roomId) throw new Error('Ya estás en una mesa');
-    const room = rooms.get(String(id));
-    if (!room) throw new Error('La mesa no existe');
-    if (room.game) throw new Error('La partida ya inició');
+    const room = rooms.get(normCode(id));
+    if (!room) throw new Error('Código incorrecto: esa mesa no existe');
+    if (isBanned(room, socket)) throw new Error('El anfitrión te expulsó de esta mesa');
+    if (room.game) throw new Error('La partida ya inició (puedes entrar como observador)');
     if (room.seats.length >= room.config.players) throw new Error('Mesa llena');
     room.seats.push(socket.id);
     room.names[socket.id] = socket.data.name;
@@ -355,6 +375,56 @@ io.on('connection', (socket) => {
   });
 
   on('leaveRoom', () => leave(socket, true));
+
+  // Expulsar (solo el anfitrión): jugadores u observadores. Queda vetado en esa mesa.
+  on('kick', ({ pid: target }) => {
+    const room = needRoom();
+    if (room.host !== socket.id) throw new Error('Solo el anfitrión puede expulsar');
+    const id = everyone(room).find((x) => room.pids[x] === target);
+    if (!id || id === socket.id) throw new Error('Jugador no válido');
+    const who = room.names[id] || 'Un jugador';
+    const tsock = io.sockets.sockets.get(id);
+    room.banned = room.banned || [];
+    const key = (room.tokens && room.tokens[id]) || id;
+    if (!room.banned.includes(key)) room.banned.push(key);
+    const kickedMsg = 'El anfitrión te expulsó de la sala';
+    if (isSpectator(room, id)) {
+      room.spectators = room.spectators.filter((x) => x !== id);
+      ['names', 'avatars', 'pids', 'voice', 'tokens'].forEach((m) => { if (room[m]) delete room[m][id]; });
+    } else if (room.game) {
+      room.gone = room.gone || {}; room.gone[id] = true; // no puede volver: su asiento sigue en automático
+      if (!(room.away && room.away[id])) markAway(room, { id, data: {}, emit() {} }, who, false, `${who} fue expulsado de la mesa. Su turno será controlado automáticamente.`);
+    } else {
+      room.seats = room.seats.filter((x) => x !== id);
+      ['names', 'avatars', 'pids', 'voice', 'tokens'].forEach((m) => { if (room[m]) delete room[m][id]; });
+      humansOnline(room).forEach((o) => io.to(o).emit('notice', `${who} fue expulsado de la mesa`));
+    }
+    if (tsock) { tsock.leave(room.id); tsock.data.roomId = null; tsock.emit('room', null); tsock.emit('notice', kickedMsg); }
+    pushRoom(room);
+    socket.emit('notice', `${who} fue expulsado`);
+  });
+
+  // Observador: entra a una mesa (en espera o en juego) sin asiento. Ve el tablero, escribe en el chat y habla por voz.
+  on('spectateRoom', ({ id }) => {
+    if (!socket.data.name) throw new Error('Primero ingresa tu nombre');
+    if (socket.data.roomId) throw new Error('Ya estás en una mesa');
+    const room = rooms.get(normCode(id));
+    if (!room) throw new Error('Código incorrecto: esa mesa no existe');
+    if (isBanned(room, socket)) throw new Error('El anfitrión te expulsó de esta mesa');
+    room.spectators = room.spectators || [];
+    if (room.spectators.length >= MAX_SPECTATORS) throw new Error('La mesa tiene demasiados observadores');
+    room.spectators.push(socket.id);
+    room.names[socket.id] = socket.data.name;
+    room.avatars[socket.id] = socket.data.avatar;
+    room.pids[socket.id] = pid();
+    room.tokens = room.tokens || {}; room.tokens[socket.id] = socket.data.token;
+    socket.emit('chatHistory', room.chat);
+    socket.join(room.id);
+    socket.data.roomId = room.id;
+    humansOnline(room).forEach((o) => io.to(o).emit('notice', `👁 ${socket.data.name} está observando la partida`));
+    pushRoom(room);
+    pushList();
+  });
 
   // Volver a la partida que dejé (mismo navegador): recupera el asiento y la mano, y se apaga el automático.
   on('rejoin', () => {
@@ -405,7 +475,7 @@ io.on('connection', (socket) => {
   on('signal', ({ to, data }) => {
     const room = needRoom();
     if (!data || JSON.stringify(data).length > 20000) return;
-    const target = room.seats.find((id) => room.pids[id] === to);
+    const target = everyone(room).find((id) => room.pids[id] === to);
     if (target && target !== socket.id) io.to(target).emit('signal', { from: room.pids[socket.id], data });
   });
 
@@ -441,6 +511,7 @@ io.on('connection', (socket) => {
   const act = (fn) => {
     const room = needGame();
     const seat = room.seats.indexOf(socket.id);
+    if (seat < 0) throw new Error('Eres observador: no puedes jugar');
     const g = room.game;
     const sig = () => `${g.turn}:${g.board.length}:${g.status}`;
     const before = sig();
@@ -452,6 +523,7 @@ io.on('connection', (socket) => {
   // Modo automático: interruptor persistente. Mientras esté activo, cada turno suyo juega la ficha de menos puntos.
   on('auto', ({ on: v }) => {
     const room = needGame();
+    if (room.seats.indexOf(socket.id) < 0) throw new Error('Eres observador: no puedes jugar');
     room.auto = room.auto || {};
     room.auto[socket.id] = typeof v === 'boolean' ? v : !room.auto[socket.id];
     if (!room.auto[socket.id]) delete room.auto[socket.id];

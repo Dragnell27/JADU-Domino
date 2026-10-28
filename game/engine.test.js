@@ -301,4 +301,33 @@ assert(!E.canRedeal(s, 0));
     assert.ok(!c.hold && !c.bonus);
   });
 }
+
+// Privacidad del doble: los demás no ven el doble hasta que su dueño decide (segundo doble o cierre de turno)
+{
+  // Apertura con doble: la mesa pública queda vacía mientras el turno está retenido
+  let st = base([[[6, 6], [6, 2], [2, 2]], [[3, 4], [5, 5], [1, 2]]]);
+  E.play(st, 0, [6, 6], 'left');
+  assert.deepStrictEqual(E.publicBoard(st).board, []);
+  assert.strictEqual(E.publicBoard(st).hidden, 1);
+  E.releaseHold(st); // se resuelve: ahora se ve
+  assert.deepStrictEqual(E.publicBoard(st).board, [[6, 6]]);
+  assert.strictEqual(E.publicBoard(st).hidden, 0);
+
+  // Doble a la derecha y segundo doble: ambos ocultos; el resto de la mesa sí se ve
+  st = base([[[6, 6], [6, 2], [2, 2], [1, 1]], [[1, 2], [5, 5], [3, 3]]]);
+  E.play(st, 0, [6, 2], 'right'); // no doble: avanza
+  assert.strictEqual(E.publicBoard(st).hidden, 0);
+  st.turn = 0; st.hold = false; // vuelve a tocar a 0 (el 1 se saltó o se simula)
+  E.play(st, 0, [6, 6], 'left');   // doble: pendiente, y tiene otro doble que encaja? [2,2] encaja en el extremo 2
+  const pb = E.publicBoard(st);
+  assert.strictEqual(pb.hidden, 1);
+  assert.strictEqual(pb.board.length, st.board.length - 1);
+  assert.ok(!pb.board.some((x) => x[0] === 6 && x[1] === 6));
+  assert.strictEqual(st.bonus, true);
+  E.play(st, 0, [2, 2], 'right'); // segundo doble
+  assert.strictEqual(E.publicBoard(st).hidden, 2);
+  if (st.bonus) E.endTurn(st, 0); else E.releaseHold(st); // al ceder el turno, todo se publica
+  assert.strictEqual(E.publicBoard(st).hidden, 0);
+  assert.strictEqual(E.publicBoard(st).board.length, st.board.length);
+}
 console.log('OK');

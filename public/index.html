@@ -40,6 +40,14 @@
     <h1>JADU Domino</h1>
     <p id="splashMsg">Conectando con la mesa…</p>
   </div>
+  <div id="manage" hidden role="dialog" aria-modal="true" aria-labelledby="manageTitle">
+    <div class="modal">
+      <h2 class="m-title" id="manageTitle">Gestionar mesa</h2>
+      <p class="muted">Código: <b id="manageCode"></b> · Quien expulses no podrá volver a esta mesa.</p>
+      <ul id="manageList"></ul>
+      <div class="m-actions"><button id="manageClose" class="btn-wood">Cerrar</button></div>
+    </div>
+  </div>
   <div id="toast" hidden role="status" aria-live="polite"></div>
     <div id="resume" hidden role="status" aria-live="polite">
     <span class="rs-text">🔌 Tienes una partida en curso</span>
@@ -47,8 +55,11 @@
     <button id="resumeNo" class="btn-wood" aria-label="Descartar la partida en curso">Descartar</button>
   </div>
 
+  <button id="specBar" type="button" hidden aria-label="Observadores de la mesa"></button>
+
   <div id="audioHud">
     <button id="leaveGame" class="hud-btn" aria-label="Salir" title="Salir"><span class="ico" data-icon="exit"></span></button>
+    <button id="kickBtn" class="hud-btn room-only" hidden aria-label="Gestionar mesa" title="Gestionar mesa: expulsar"><span class="ico" data-icon="users"></span></button>
     <button id="micBtn" class="hud-btn room-only" data-state="off" aria-label="Unirse al chat de voz" title="Unirse al chat de voz"><span class="ico" data-icon="mic"></span></button>
     <button id="chatBtn" class="hud-btn room-only" aria-label="Chat de la mesa" title="Chat de la mesa"><span class="ico" data-icon="chat"></span><span id="chatBadge" hidden>0</span></button>
     <button id="installBtn" class="hud-btn" aria-label="Instalar app" title="Instalar app" hidden><span class="ico" data-icon="download"></span></button>
@@ -137,13 +148,17 @@
       <button class="primary wide">Crear mesa</button>
     </form>
 
-    <h3>Mesas abiertas</h3>
-    <ul id="roomList"></ul>
+    <h3>Unirme con un código</h3>
+    <form id="codeForm" class="code-form">
+      <input id="codeInput" maxlength="8" placeholder="Código de la mesa" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Código de la mesa">
+      <button id="codeJoin" type="submit" class="btn-wood gold">Unirme</button>
+      <button id="codeSpectate" type="button" class="btn-wood" title="Mirar la partida sin jugar (puedes chatear y hablar)">👁 Observar</button>
+    </form>
   </section>
 
   <section id="waiting" class="card" hidden>
     <header class="w-head">
-      <h2>Mesa <span id="wId"></span></h2>
+      <h2>Mesa <span id="wId"></span> <button id="copyCode" type="button" class="btn-wood copy-code" aria-label="Copiar código de la mesa" title="Copiar código">📋 Copiar</button></h2>
       <div id="wInfo" class="chips"></div>
     </header>
     <div id="wSeats" class="seat-grid"></div>
@@ -179,7 +194,12 @@
       <div id="me">
         <div id="meCard"></div>
         <div id="actions"></div>
-        <div id="hand" class="player-hand"></div>
+        <div id="handWrap">
+          <button id="handPrev" type="button" class="hand-nav" hidden aria-label="Fichas anteriores">‹</button>
+          <div id="hand" class="player-hand"></div>
+          <button id="handNext" type="button" class="hand-nav" hidden aria-label="Fichas siguientes">›</button>
+          <span id="handPageInfo" hidden aria-live="polite"></span>
+        </div>
       </div>
     </div>
     <div id="blocked" hidden><h2>¡Juego trancado!</h2><p>Calculando puntos…</p></div>

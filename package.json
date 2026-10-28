@@ -1,21 +1,26 @@
 {
-  "name": "domino-online",
+  "name": "jadu-domino",
   "version": "0.1.0",
+  "description": "JADU Domino: dominó multijugador en tiempo real (Node.js + Socket.io) con chat de texto y de voz, modo automático y PWA.",
   "private": true,
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node game/engine.test.js",
+    "test": "node game/engine.test.js && node game/layout.test.js",
     "build": "node scripts/build.js",
     "start:prod": "node scripts/build.js && node server.js --dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dragnell27/JADU-Domino.git"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "compression": "^1.8.2",
     "express": "^4.19.2",
     "socket.io": "^4.7.5",
     "esbuild": "^0.28.2"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }

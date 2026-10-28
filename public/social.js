@@ -8,7 +8,7 @@
 const Chat = { open: false, unread: 0 };
 const chatList = $('chatList');
 
-const myPid = () => (room && room.pids ? room.pids[room.me] : null);
+const myPid = () => (room ? room.myPid || null : null);
 const emojiOf = (id) => (DominoAvatars.byId(id) || DominoAvatars.AVATARS[0]).emoji;
 
 function addChatMessage(m, silent) {
@@ -54,7 +54,6 @@ socket.on('chatHistory', (list) => { chatList.innerHTML = ''; list.forEach((m) =
 const Voice = { on: false, muted: true, stream: null, peers: new Map(), ctx: null, analysers: new Map(), timer: null };
 const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
 const sendSignal = (to, data) => socket.emit('signal', { to, data });
-const pidIndex = (pid) => (room && room.pids ? room.pids.indexOf(pid) : -1);
 
 function watchSpeaking(key, stream) {
   try {
@@ -148,7 +147,7 @@ async function joinVoice() {
   if (Voice.stream) watchSpeaking(myPid(), Voice.stream);
   socket.emit('voice', { on: true, muted: Voice.muted });
   // Quien entra llama a los que ya estaban en la voz.
-  room.pids.forEach((pid, i) => { if (pid !== myPid() && room.voice[i]) makePeer(pid, true); });
+  room.people.forEach((p) => { if (p.pid !== myPid() && p.voice) makePeer(p.pid, true); }); // jugadores y observadores
   renderVoice();
 }
 function leaveVoice(notify = true) {
@@ -192,7 +191,7 @@ socket.on('room', (r) => {
   document.body.classList.toggle('in-room', !!r);
   if (!r) { leaveVoice(false); setChatOpen(false); chatList.innerHTML = ''; Chat.unread = 0; renderUnread(); return; }
   if (Voice.on) {
-    Voice.peers.forEach((_, pid) => { const i = r.pids.indexOf(pid); if (i < 0 || !r.voice[i]) dropPeer(pid); });
+    Voice.peers.forEach((_, pid) => { const p = r.people.find((x) => x.pid === pid); if (!p || !p.voice) dropPeer(pid); });
   }
   renderVoice();
 });

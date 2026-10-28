@@ -190,28 +190,18 @@ $('createForm').onsubmit = (e) => {
   socket.emit('createRoom', { players: radio('players'), mode: radio('mode'), target: $('cfgTarget').value });
 };
 
-socket.on('rooms', (list) => {
-  const ul = $('roomList');
-  ul.innerHTML = list.length ? '' : '<li class="muted">No hay mesas todavía</li>';
-  list.forEach((r) => {
-    const li = document.createElement('li');
-    const mode = r.players === 4 ? (r.mode === 'teams' ? ' · parejas' : ' · individual') : '';
-    li.textContent = `#${r.id} de ${r.host} — ${r.seated}/${r.players}${mode} · ${r.target} pts`;
-    const b = document.createElement('button');
-    b.textContent = 'Unirse';
-    b.disabled = r.inGame || r.seated >= r.players;
-    b.onclick = () => socket.emit('joinRoom', { id: r.id });
-    li.appendChild(b);
-    ul.appendChild(li);
-  });
-});
+// Entrar por código (las mesas no son públicas)
+const codeVal = () => $('codeInput').value.trim().toUpperCase();
+$('codeInput').oninput = () => { $('codeInput').value = $('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+$('codeForm').onsubmit = (e) => { e.preventDefault(); if (!codeVal()) return toast('Escribe el código de la mesa'); socket.emit('joinRoom', { id: codeVal() }); };
+$('codeSpectate').onclick = () => { if (!codeVal()) return toast('Escribe el código de la mesa'); socket.emit('spectateRoom', { id: codeVal() }); };
 
 socket.on('notice', toast);
 $('leaveWait').onclick = () => socket.emit('leaveRoom');
 // Salir del HUD: dentro de una mesa la abandona; en el lobby (sin mesa) vuelve a la pantalla de registro
 // Salida de rescate: no espera al servidor. Aunque la mesa esté huérfana o la conexión falle, limpia el estado local y vuelve al lobby.
 function resetToLobby() {
-  room = null; prevRound = -1; lastSnap = null; review = false; prevHandKeys = null; handOrder = null; selected = null;
+  room = null; prevRound = -1; lastSnap = null; review = false; prevHandKeys = null; handOrder = null; handPage = 0; selected = null;
   turnTimer = null; startTimerLoop();
   ['pozoModal', 'badhand'].forEach((id) => { const e = $(id); if (e) e.hidden = true; });
   document.body.classList.remove('in-room');
@@ -247,10 +237,20 @@ socket.on('room', (r) => {
   renderTable();
 });
 
+// Observadores: etiqueta propia ("Modo observador") y contador con la lista; los nombres llevan data-pid para el indicador de voz.
+function renderSpectators() {
+  const bar = $('specBar'), specs = room.specs || [];
+  bar.hidden = !room.spectator && !specs.length;
+  if (bar.hidden) return;
+  bar.innerHTML = `<span>👁 ${room.spectator ? 'Modo observador' : specs.length === 1 ? '1 observador' : specs.length + ' observadores'}</span>`;
+  bar.title = specs.map((s) => s.name).join(', ');
+  bar.onclick = () => toast('👁 Observando: ' + (specs.map((s) => s.name).join(', ') || '—'), 'info');
+}
+
 function renderWaiting() {
   show('waiting');
   const cfg = room.config, n = cfg.players, seated = room.seats.length;
-  $('wId').textContent = '#' + room.id;
+  $('wId').textContent = room.id;
   const chips = [`${n} jugadores`, `Objetivo ${cfg.target} pts`];
   if (n === 4) chips.push(cfg.mode === 'teams' ? 'Parejas' : 'Individual');
   $('wInfo').innerHTML = chips.map((t) => `<span class="chip">${t}</span>`).join('');
@@ -272,8 +272,10 @@ function renderWaiting() {
   }
 
   const missing = n - seated;
-  $('wHint').textContent = missing ? `Faltan ${missing} ${missing === 1 ? 'jugador' : 'jugadores'}`
+  $('wHint').textContent = room.spectator ? '👁 Estás observando: verás la partida cuando inicie'
+    : missing ? `Faltan ${missing} ${missing === 1 ? 'jugador' : 'jugadores'}`
     : room.isHost ? '¡Mesa completa! Puedes iniciar la partida.' : 'Esperando a que el anfitrión inicie…';
+  renderSpectators();
   $('startBtn').hidden = !room.isHost;
   $('startBtn').disabled = missing > 0;
 }
@@ -369,6 +371,7 @@ function renderTable() {
   startTimerLoop();
 
   renderSeats(newRound);
+  renderSpectators();
   renderHand(newRound);
   renderPozo();
   renderBadHand();
@@ -400,7 +403,7 @@ function renderTable() {
     }
     // El robo se hace desde el pozo flotante (arrastrar o clic)
   }
-  if (g.status === 'playing' || (room.auto || [])[room.me]) {
+  if (!room.spectator && (g.status === 'playing' || (room.auto || [])[room.me])) {
     // Interruptor del modo automático: persiste hasta que se vuelva a pulsar
     const on = !!(room.auto || [])[room.me];
     const auto = el('button', 'btn-wood auto' + (on ? ' on' : ''), `🤖 Auto: ${on ? 'ON' : 'OFF'}`);
@@ -464,7 +467,7 @@ function seatCard(seat, deal, el, vertical) {
 }
 
 function renderSeats(deal) {
-  const n = room.seats.length, me = room.me;
+  const n = room.seats.length, me = room.me >= 0 ? room.me : 0; // el observador mira desde el asiento 0
   ['top', 'left', 'right'].forEach((p) => ($('seat-' + p).hidden = true));
   POSITIONS[n].forEach((pos, i) => {
     const el = $('seat-' + pos);
@@ -487,22 +490,29 @@ function orderedHand(hand) {
   return sorted;
 }
 
+// Paginado de la mano: máximo 9 fichas por página; los botones solo existen si hay más de 9.
+const HAND_PAGE = 9;
+let handPage = 0;
 function renderHand(deal) {
   const g = room.game, hand = $('hand');
-  // El tamaño base (7 fichas) lo da el clamp() de --hs en CSS; con más fichas (tras robar) se reduce para que quepan.
+  // El tamaño base (7 fichas) lo da el clamp() de --hs en CSS; con 8 o 9 fichas, o con la página llena, se reduce para que quepan.
   const root = document.documentElement.style;
-  const n = g.hand.length;
-  const flat = false; // la mano siempre va de pie (vertical), también en móvil horizontal
-  if (n > 7 && flat) root.setProperty('--hs', Math.max(18, Math.min(56, Math.floor((innerWidth - 310) / n / 2) - 3, Math.floor(innerHeight * 0.12))) + 'px');
-  else if (n > 7) root.setProperty('--hs', Math.max(28, Math.min(56, Math.floor((innerWidth - 56) / n) - 10, Math.floor(innerHeight * 0.1))) + 'px');
+  const n = g.hand.length, paged = n > HAND_PAGE, shown = Math.min(n, HAND_PAGE);
+  if (shown > 7) root.setProperty('--hs', Math.max(24, Math.min(56, Math.floor((innerWidth - 56 - (paged ? 60 : 0)) / shown) - 10, Math.floor(innerHeight * 0.1))) + 'px');
   else root.removeProperty('--hs');
   const keys = g.hand.map(tileKey);
   const fresh = !deal && prevHandKeys ? keys.filter((k) => !prevHandKeys.has(k)) : [];
   prevHandKeys = new Set(keys);
+  const sorted = orderedHand(g.hand);
+  const pages = Math.max(1, Math.ceil(n / HAND_PAGE));
+  if (deal) handPage = 0;
+  const firstFresh = sorted.findIndex((t) => fresh.includes(tileKey(t)));
+  if (firstFresh >= 0) handPage = Math.floor(firstFresh / HAND_PAGE); // la ficha robada se muestra en su página
+  handPage = Math.min(Math.max(handPage, 0), pages - 1);
   hand.innerHTML = '';
-  orderedHand(g.hand).forEach((t, i) => {
+  sorted.slice(handPage * HAND_PAGE, handPage * HAND_PAGE + HAND_PAGE).forEach((t, i) => {
     const sides = sidesOf(t);
-    const el = tileEl(t[0], t[1], 'var(--hs)', flat);
+    const el = tileEl(t[0], t[1], 'var(--hs)', false); // la mano siempre va de pie (vertical)
     el.classList.add('mine');
     el.dataset.key = tileKey(t);
     if (sides.length) el.classList.add('playable');
@@ -512,9 +522,31 @@ function renderHand(deal) {
     el.onpointerdown = (ev) => startDrag(ev, el, t, sides.length > 0); // siempre se puede arrastrar para reordenar
     hand.appendChild(el);
   });
-  // Si aun así no caben (muchas fichas tras robar), la mano se desliza con el dedo.
+  renderPager(pages);
+  // Si aun así no caben, la mano se desliza con el dedo.
   hand.classList.toggle('scroll', hand.scrollWidth > hand.clientWidth + 1);
 }
+function renderPager(pages) {
+  const show = pages > 1;
+  ['handPrev', 'handNext', 'handPageInfo'].forEach((id) => { $(id).hidden = !show; });
+  if (!show) return;
+  // Las flechas miden exactamente lo mismo que una ficha y se alinean con su base
+  const wrap = $('handWrap'), hand = $('hand'), tile = hand.firstElementChild, cs = getComputedStyle(hand);
+  if (tile) {
+    wrap.style.setProperty('--nav-h', tile.offsetHeight + 'px');
+    wrap.style.setProperty('--nav-mb', (parseFloat(cs.paddingBottom) + parseFloat(cs.borderBottomWidth)) + 'px');
+  }
+  $('handPageInfo').textContent = `${handPage + 1}/${pages}`;
+  $('handPrev').disabled = handPage === 0;
+  $('handNext').disabled = handPage === pages - 1;
+}
+function gotoHandPage(d) {
+  handPage += d;
+  AudioManager.play('pick');
+  if (room && room.game) renderHand(false);
+}
+$('handPrev').onclick = () => gotoHandPage(-1);
+$('handNext').onclick = () => gotoHandPage(1);
 
 // ---------- Mano mala (4+ dobles) ----------
 $('badRestart').onclick = () => socket.emit('redeal');
@@ -736,7 +768,10 @@ function startDrag(ev, el, tile, canPlay) {
     if (drop && overHand(e.clientX, e.clientY)) { // soltada en la mano: se queda el nuevo orden
       const ref = reorder(e.clientX, e.clientY);
       if (el.nextSibling !== ref) hand.insertBefore(el, ref);
-      handOrder = [...hand.children].map((ch) => ch.dataset.key);
+      // El nuevo orden solo afecta a la página visible; el resto de la mano conserva su lugar.
+      const all = handOrder.slice(), vis = [...hand.children].map((ch) => ch.dataset.key);
+      all.splice(handPage * HAND_PAGE, vis.length, ...vis);
+      handOrder = all;
       return renderTable();
     }
     const near = drop && canPlay ? slotNear(e.clientX, e.clientY) : null;
@@ -897,3 +932,40 @@ function renderResult() {
   modal.append(act);
   res.replaceChildren(modal);
 }
+
+
+// ---------- Código de mesa y gestión del anfitrión (expulsar) ----------
+$('copyCode').onclick = async () => {
+  const text = `Únete a mi mesa de JADU Domino con el código ${room.id}: ${location.origin}`;
+  try { await navigator.clipboard.writeText(text); toast('Código copiado: ' + room.id, 'info'); }
+  catch (e) { toast('Código de la mesa: ' + room.id, 'info'); }
+};
+function renderManage() {
+  if (!room) return;
+  $('kickBtn').hidden = !room.isHost;
+  if (!room.isHost) { $('manage').hidden = true; return; }
+  if ($('manage').hidden) return;
+  $('manageCode').textContent = room.id;
+  const ul = $('manageList');
+  ul.innerHTML = '';
+  const rows = [];
+  room.seats.forEach((name, i) => { if (i !== room.me) rows.push({ name, pid: room.pids[i], tag: (room.away || [])[i] ? '🔌 desconectado' : 'jugador', emoji: avatarOf(i) }); });
+  (room.specs || []).forEach((s) => rows.push({ name: s.name, pid: s.pid, tag: '👁 observador', emoji: (DominoAvatars.byId(s.avatar) || DominoAvatars.AVATARS[0]).emoji }));
+  if (!rows.length) ul.innerHTML = '<li class="muted">Aún no hay nadie más en la mesa</li>';
+  rows.forEach((r) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="mg-av">${r.emoji}</span><span class="mg-name">${esc(r.name)} <small>${r.tag}</small></span>`;
+    const b = document.createElement('button');
+    b.className = 'btn-wood danger'; b.textContent = 'Expulsar';
+    b.onclick = () => { // dos toques para confirmar
+      if (b.dataset.sure) { socket.emit('kick', { pid: r.pid }); return; }
+      b.dataset.sure = '1'; b.textContent = '¿Seguro?';
+      setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Expulsar'; } }, 3000);
+    };
+    li.appendChild(b);
+    ul.appendChild(li);
+  });
+}
+$('kickBtn').onclick = () => { $('manage').hidden = false; renderManage(); };
+$('manageClose').onclick = () => { $('manage').hidden = true; };
+socket.on('room', (r) => { if (!r) $('manage').hidden = true; else renderManage(); });

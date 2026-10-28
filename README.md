@@ -49,7 +49,7 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 ## Cómo se juega
 
 1. **Registro:** escribe tu nombre de usuario y elige un avatar entre los 10 disponibles (si no eliges, se asigna uno al azar). El navegador recuerda tu nombre y avatar para la próxima vez.
-2. **Lobby:** crea una mesa (2, 3 o 4 jugadores, individual o por parejas, puntos objetivo de 50 a 500) o únete a una de las mesas abiertas de la lista.
+2. **Lobby:** crea una mesa (2, 3 o 4 jugadores, individual o por parejas, puntos objetivo de 50 a 500). Las mesas **no son públicas**: al crearla se genera un **código de 5 caracteres** (con botón *Copiar*) que se comparte; los demás escriben el código en *Unirme con un código* (o *Observar*).
 3. **Sala de espera:** cuando la mesa se llena, el anfitrión pulsa **Iniciar**.
 4. **Mesa:** en tu turno arrastra una ficha de tu mano a una punta del tablero, o tócala para seleccionarla y toca la punta donde quieres jugarla. Las fichas que no encajan se atenúan.
 5. **Pozo:** si no tienes jugada y quedan fichas en el pozo, se abre un modal con las fichas boca abajo; toca una para robarla.
@@ -69,7 +69,7 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 **Jugar fichas**
 - Una ficha solo se juega si uno de sus lados coincide con una punta del tablero.
 - Los dobles se colocan cruzados.
-- **Doble múltiple:** tras jugar un doble puedes jugar otro doble en el mismo turno. Para que los rivales no deduzcan si tenías otro doble, el turno se cede tras una pausa aleatoria de 0,5 a 1,2 s.
+- **Doble múltiple:** tras jugar un doble puedes jugar otro doble en el mismo turno. Para que los rivales no deduzcan si tenías otro doble, el turno se cede tras una pausa aleatoria de 0,5 a 1,2 s. Además, **el doble no se muestra a los demás** (ni en el tablero ni en el contador de fichas de quien lo jugó) hasta que su dueño decide: se publica junto con el segundo doble, o al ceder el turno. Quien juega sí lo ve al instante.
 
 **Pozo, pase y salto**
 - Sin jugada y con pozo: se roba hasta poder jugar. El pozo es público (todos ven cuántas fichas quedan) pero la ficha que sale es desconocida.
@@ -88,6 +88,16 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 - Cada turno dura **20 s**. Al agotarse, el servidor juega por ti la **ficha válida más baja** (o roba/cede el turno si no hay jugada).
 - **Modo automático (interruptor ON/OFF):** mientras esté activo, el servidor juega una **ficha válida al azar** en cada uno de tus turnos y resuelve el robo del pozo por ti. Si el anfitrión lo tiene activo, la siguiente ronda o partida empieza sola.
 
+**Expulsar (anfitrión)**
+- El anfitrión tiene en la barra superior el botón 👥 *Gestionar mesa*, con la lista de jugadores y observadores y un botón **Expulsar** (con confirmación de dos toques).
+- Quien es expulsado vuelve al lobby con un aviso y **no puede volver a entrar a esa mesa** (se veta por el código de su navegador). Si era un jugador en plena partida, su asiento sigue en automático.
+
+**Observadores**
+- Desde el lobby, escribiendo el código y pulsando **👁 Observar** (mesa en espera o en juego) se entra sin asiento: se ve el tablero, los puntos y cuántas fichas tiene cada jugador, pero **nunca las manos** ni se puede jugar.
+- Los observadores pueden **escribir en el chat y hablar por voz** con los jugadores. Máximo 20 por mesa.
+- Una etiqueta "👁 N observadores" avisa a los jugadores (al tocarla muestra los nombres) y quien observa ve "Modo observador".
+- Si un observador se va, la partida no se entera. Los observadores no mantienen viva una mesa: sin jugadores humanos conectados se cierra igual.
+
 **Abandono y reconexión**
 - Si un jugador cierra la pestaña, pierde conexión o pulsa **Salir** en plena partida, su asiento pasa a **modo automático** y los demás terminan la partida.
 - Si vuelve con el mismo navegador, se le ofrece **volver a la partida** (recupera su mano y se apaga el automático) o descartarla. También se ofrece volver a quien pulsó **Salir** (un aviso pequeño que no bloquea la pantalla).
@@ -100,6 +110,7 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 
 - **Tablero en serpentina** que escala para que quepa toda la cadena, con dobles cruzados.
 - **Mano:** ordénala arrastrando las fichas entre sí (el orden es local); se eleva 10 px al tocar o pasar el cursor.
+- **Paginado de la mano:** muestra como máximo 9 fichas por página; los botones ‹ › y el indicador `1/2` aparecen solo cuando tienes más de 9 y se ocultan si no. Al robar, se muestra la página de la ficha nueva. Reordenar por arrastre funciona dentro de la página visible.
 - **Reloj de turno** en el avatar del jugador, con colores (verde, amarillo, rojo) y un tic en los últimos 5 s.
 - **Frases aleatorias** al intentar una jugada inválida (editables en [`public/messages.js`](public/messages.js)).
 - **Audio:** efectos y música sintetizados con Web Audio (no hay archivos de audio). 4 modos (completo, solo efectos, solo música, silencio) guardados en el navegador.
@@ -187,9 +198,9 @@ PORT=8080 TURN_SECONDS=30 npm start
 
 ## Eventos de Socket.io
 
-**Cliente → servidor:** `setName`, `createRoom`, `joinRoom`, `leaveRoom`, `rejoin`, `forfeit`, `startGame`, `nextRound`, `rematch`, `play`, `draw`, `endTurn`, `pass`, `auto`, `redeal`, `chat`, `voice`, `signal`.
+**Cliente → servidor:** `setName`, `createRoom`, `joinRoom`, `spectateRoom`, `kick`, `leaveRoom`, `rejoin`, `forfeit`, `startGame`, `nextRound`, `rematch`, `play`, `draw`, `endTurn`, `pass`, `auto`, `redeal`, `chat`, `voice`, `signal`.
 
-**Servidor → cliente:** `named`, `rooms` (lista de mesas), `room` (vista de la mesa; `null` = fuera de mesa), `notice` (aviso), `timeout` (el servidor jugó por alguien), `skipped`, `chat`, `chatHistory`, `signal`, `resume` (oferta de volver a una partida).
+**Servidor → cliente:** `named`, `room` (vista de la mesa; `null` = fuera de mesa), `notice` (aviso), `timeout` (el servidor jugó por alguien), `skipped`, `chat`, `chatHistory`, `signal`, `resume` (oferta de volver a una partida).
 
 ---
 
