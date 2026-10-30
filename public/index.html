@@ -139,6 +139,13 @@
       </div>
       <p class="muted" id="modeHint" hidden>Las parejas solo están disponibles con 4 jugadores.</p>
 
+      <div class="opts modes" id="visOpts" role="radiogroup" aria-label="Visibilidad de la mesa">
+        <label class="opt"><input type="radio" name="vis" value="public" checked>
+          <span class="opt-body"><span class="opt-icon">🌐</span><b>Pública</b><small>entran desde la lista</small></span></label>
+        <label class="opt"><input type="radio" name="vis" value="private">
+          <span class="opt-body"><span class="opt-icon">🔒</span><b>Privada</b><small>piden el código</small></span></label>
+      </div>
+
       <div class="target">
         <label for="cfgTarget">Objetivo de mesa: <b id="targetVal">100</b> pts</label>
         <input id="cfgTarget" type="range" min="50" max="500" step="50" value="100">
@@ -148,7 +155,10 @@
       <button class="primary wide">Crear mesa</button>
     </form>
 
-    <h3>Unirme con un código</h3>
+    <h3>Mesas disponibles</h3>
+    <ul id="roomList"></ul>
+
+    <h3>¿Tienes un código?</h3>
     <form id="codeForm" class="code-form">
       <input id="codeInput" maxlength="8" placeholder="Código de la mesa" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Código de la mesa">
       <button id="codeJoin" type="submit" class="btn-wood gold">Unirme</button>

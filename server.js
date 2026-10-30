@@ -61,6 +61,19 @@ function newRoomCode() {
     if (!rooms.has(c)) return c;
   }
 }
+let nextRoomNum = 1; // número visible en la lista (distinto del código)
+// Localiza la mesa: por código (cualquiera) o por número de la lista. Las privadas exigen el código siempre.
+function findRoom({ id, num, code }) {
+  if (num !== undefined && num !== null && num !== '') { // desde la lista: pública entra directo, privada pide el código
+    const room = [...rooms.values()].find((r) => r.num === Number(num));
+    if (!room) throw new Error('Esa mesa ya no existe');
+    if (room.private && normCode(code) !== room.id) throw new Error(normCode(code) ? 'Código incorrecto' : 'Esta mesa es privada: escribe el código');
+    return room;
+  }
+  const room = rooms.get(normCode(id || code)); // por código: sirve para públicas y privadas
+  if (!room) throw new Error('Código incorrecto: esa mesa no existe');
+  return room;
+}
 const normCode = (v) => String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 
@@ -177,6 +190,8 @@ function roomView(room, socketId) {
     pids: room.seats.map((id) => room.pids[id]),
     voice: room.seats.map((id) => room.voice[id] || null),
     auto: room.seats.map((id) => !!(room.auto && room.auto[id])),
+    private: !!room.private,
+    num: room.num,
     spectator: me < 0, // observa: ve la mesa pero no juega ni ve manos
     myPid: room.pids[socketId],
     specs: (room.spectators || []).map((id) => ({ name: room.names[id], avatar: room.avatars[id], pid: room.pids[id] })),
@@ -213,7 +228,21 @@ function pushRoom(room) {
   // Los ausentes (salieron o se desconectaron) no reciben la mesa: si su socket sigue vivo, los devolvería al tablero.
   everyone(room).forEach((id) => { if (!(room.away && room.away[id])) io.to(id).emit('room', roomView(room, id)); });
 }
-const pushList = () => {}; // las mesas ya no son públicas: se entra con código (no hay lista de mesas)
+// Lista de mesas visibles. Las privadas aparecen con candado pero NUNCA se envía su código.
+function roomList() {
+  return [...rooms.values()].filter((r) => r.seats.some((id) => !(r.away && r.away[id]))).map((r) => ({
+    num: r.num,
+    host: r.names[r.host],
+    players: r.config.players,
+    mode: r.config.mode,
+    target: r.config.target,
+    seated: r.seats.length,
+    inGame: !!r.game,
+    spectators: (r.spectators || []).length,
+    private: !!r.private,
+  }));
+}
+const pushList = () => io.emit('rooms', roomList());
 
 const EMPTY_TABLE_MS = 5 * 60 * 1000; // sin humanos conectados, la mesa se cierra tras este tiempo
 const MAX_SPECTATORS = 20;
@@ -332,18 +361,19 @@ io.on('connection', (socket) => {
     socket.data.avatar = Avatars.byId(avatar) ? avatar : Avatars.random(); // valida contra el catálogo
     if (typeof token === 'string' && /^[\w-]{8,64}$/.test(token)) socket.data.token = token;
     socket.emit('named', name);
+    socket.emit('rooms', roomList());
     const r = findResumable(socket.data.token);
     if (r && !socket.data.roomId) socket.emit('resume', { room: r.room.id }); // ¿volver a su partida?
   });
 
-  on('createRoom', ({ players, mode, target }) => {
+  on('createRoom', ({ players, mode, target, visibility }) => {
     if (!socket.data.name) throw new Error('Primero ingresa tu nombre');
     if (socket.data.roomId) throw new Error('Ya estás en una mesa');
     players = Number(players);
     if (![2, 3, 4].includes(players)) throw new Error('Jugadores: 2, 3 o 4');
     mode = players === 4 && mode === 'teams' ? 'teams' : 'individual';
     const room = {
-      id: newRoomCode(), host: socket.id, config: { players, mode, target: engine.normalizeTarget(target) },
+      id: newRoomCode(), num: nextRoomNum++, private: visibility === 'private', host: socket.id, config: { players, mode, target: engine.normalizeTarget(target) },
       seats: [socket.id], names: { [socket.id]: socket.data.name }, avatars: { [socket.id]: socket.data.avatar }, pids: { [socket.id]: pid() }, tokens: { [socket.id]: socket.data.token }, away: {}, gone: {}, voice: {}, chat: [], scores: [], game: null,
     };
     room.scores = Array(unitCount(room)).fill(0);
@@ -354,11 +384,10 @@ io.on('connection', (socket) => {
     pushList();
   });
 
-  on('joinRoom', ({ id }) => {
+  on('joinRoom', (req) => {
     if (!socket.data.name) throw new Error('Primero ingresa tu nombre');
     if (socket.data.roomId) throw new Error('Ya estás en una mesa');
-    const room = rooms.get(normCode(id));
-    if (!room) throw new Error('Código incorrecto: esa mesa no existe');
+    const room = findRoom(req);
     if (isBanned(room, socket)) throw new Error('El anfitrión te expulsó de esta mesa');
     if (room.game) throw new Error('La partida ya inició (puedes entrar como observador)');
     if (room.seats.length >= room.config.players) throw new Error('Mesa llena');
@@ -405,11 +434,10 @@ io.on('connection', (socket) => {
   });
 
   // Observador: entra a una mesa (en espera o en juego) sin asiento. Ve el tablero, escribe en el chat y habla por voz.
-  on('spectateRoom', ({ id }) => {
+  on('spectateRoom', (req) => {
     if (!socket.data.name) throw new Error('Primero ingresa tu nombre');
     if (socket.data.roomId) throw new Error('Ya estás en una mesa');
-    const room = rooms.get(normCode(id));
-    if (!room) throw new Error('Código incorrecto: esa mesa no existe');
+    const room = findRoom(req);
     if (isBanned(room, socket)) throw new Error('El anfitrión te expulsó de esta mesa');
     room.spectators = room.spectators || [];
     if (room.spectators.length >= MAX_SPECTATORS) throw new Error('La mesa tiene demasiados observadores');

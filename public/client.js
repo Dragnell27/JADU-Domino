@@ -187,10 +187,53 @@ const syncTarget = () => {
 $('cfgTarget').oninput = syncTarget; syncTarget();
 $('createForm').onsubmit = (e) => {
   e.preventDefault();
-  socket.emit('createRoom', { players: radio('players'), mode: radio('mode'), target: $('cfgTarget').value });
+  socket.emit('createRoom', { players: radio('players'), mode: radio('mode'), target: $('cfgTarget').value, visibility: radio('vis') });
 };
 
-// Entrar por código (las mesas no son públicas)
+// Lista de mesas: públicas entran directo; las privadas (🔒) piden el código en la propia fila
+socket.on('rooms', (list) => {
+  const ul = $('roomList');
+  ul.innerHTML = list.length ? '' : '<li class="muted">No hay mesas todavía: crea una</li>';
+  list.forEach((r) => {
+    const li = document.createElement('li');
+    const mode = r.players === 4 ? (r.mode === 'teams' ? ' · parejas' : ' · individual') : '';
+    const info = document.createElement('span');
+    info.className = 'li-info';
+    info.textContent = `${r.private ? '🔒' : '🌐'} #${r.num} de ${r.host} — ${r.seated}/${r.players}${mode} · ${r.target} pts${r.inGame ? ' · en juego' : ''}${r.spectators ? ' · 👁 ' + r.spectators : ''}`;
+    const join = document.createElement('button');
+    join.textContent = 'Unirse';
+    join.disabled = r.inGame || r.seated >= r.players;
+    const obs = document.createElement('button');
+    obs.textContent = '👁 Observar';
+    obs.className = 'obs-btn';
+    obs.title = 'Mirar la partida sin jugar (puedes chatear y hablar)';
+    const box = document.createElement('span');
+    box.className = 'li-actions';
+    box.append(join, obs);
+    li.append(info, box);
+    ul.appendChild(li);
+
+    const go = (event, code) => socket.emit(event, { num: r.num, code });
+    if (!r.private) { join.onclick = () => go('joinRoom'); obs.onclick = () => go('spectateRoom'); return; }
+    // Privada: se despliega un campo para el código y luego se envía la acción elegida
+    let row = null;
+    const ask = (event) => {
+      if (row) { row.remove(); row = null; return; }
+      row = document.createElement('form');
+      row.className = 'code-row';
+      row.innerHTML = '<input maxlength="8" placeholder="Código de la mesa" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Código de la mesa"><button class="btn-wood gold">Entrar</button>';
+      const inp = row.querySelector('input');
+      inp.oninput = () => { inp.value = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+      row.onsubmit = (e) => { e.preventDefault(); if (!inp.value) return toast('Escribe el código de la mesa'); go(event, inp.value); };
+      li.appendChild(row);
+      inp.focus();
+    };
+    join.onclick = () => ask('joinRoom');
+    obs.onclick = () => ask('spectateRoom');
+  });
+});
+
+// Entrar por código (sirve para mesas públicas y privadas)
 const codeVal = () => $('codeInput').value.trim().toUpperCase();
 $('codeInput').oninput = () => { $('codeInput').value = $('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); };
 $('codeForm').onsubmit = (e) => { e.preventDefault(); if (!codeVal()) return toast('Escribe el código de la mesa'); socket.emit('joinRoom', { id: codeVal() }); };
@@ -251,7 +294,7 @@ function renderWaiting() {
   show('waiting');
   const cfg = room.config, n = cfg.players, seated = room.seats.length;
   $('wId').textContent = room.id;
-  const chips = [`${n} jugadores`, `Objetivo ${cfg.target} pts`];
+  const chips = [room.private ? '🔒 Privada' : '🌐 Pública', `${n} jugadores`, `Objetivo ${cfg.target} pts`];
   if (n === 4) chips.push(cfg.mode === 'teams' ? 'Parejas' : 'Individual');
   $('wInfo').innerHTML = chips.map((t) => `<span class="chip">${t}</span>`).join('');
 

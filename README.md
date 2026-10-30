@@ -49,7 +49,7 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 ## Cómo se juega
 
 1. **Registro:** escribe tu nombre de usuario y elige un avatar entre los 10 disponibles (si no eliges, se asigna uno al azar). El navegador recuerda tu nombre y avatar para la próxima vez.
-2. **Lobby:** crea una mesa (2, 3 o 4 jugadores, individual o por parejas, puntos objetivo de 50 a 500). Las mesas **no son públicas**: al crearla se genera un **código de 5 caracteres** (con botón *Copiar*) que se comparte; los demás escriben el código en *Unirme con un código* (o *Observar*).
+2. **Lobby:** crea una mesa (2, 3 o 4 jugadores, individual o por parejas, puntos objetivo de 50 a 500) y elige si es **🌐 Pública** o **🔒 Privada**. Todas aparecen en la lista *Mesas disponibles*: en las públicas, **Unirse** entra directo; en las privadas, la fila pide el **código de 5 caracteres** (que ve el anfitrión en su sala, con botón *Copiar*). Con **👁 Observar** se entra sin asiento (en las privadas también pide el código). También puedes escribir un código en *¿Tienes un código?*.
 3. **Sala de espera:** cuando la mesa se llena, el anfitrión pulsa **Iniciar**.
 4. **Mesa:** en tu turno arrastra una ficha de tu mano a una punta del tablero, o tócala para seleccionarla y toca la punta donde quieres jugarla. Las fichas que no encajan se atenúan.
 5. **Pozo:** si no tienes jugada y quedan fichas en el pozo, se abre un modal con las fichas boca abajo; toca una para robarla.
@@ -93,7 +93,7 @@ Abre <http://localhost:3000>. Para jugar con otras personas, comparte la direcci
 - Quien es expulsado vuelve al lobby con un aviso y **no puede volver a entrar a esa mesa** (se veta por el código de su navegador). Si era un jugador en plena partida, su asiento sigue en automático.
 
 **Observadores**
-- Desde el lobby, escribiendo el código y pulsando **👁 Observar** (mesa en espera o en juego) se entra sin asiento: se ve el tablero, los puntos y cuántas fichas tiene cada jugador, pero **nunca las manos** ni se puede jugar.
+- Desde la lista (o con el código) y pulsando **👁 Observar** (mesa en espera o en juego; en las privadas se pide el código) se entra sin asiento: se ve el tablero, los puntos y cuántas fichas tiene cada jugador, pero **nunca las manos** ni se puede jugar.
 - Los observadores pueden **escribir en el chat y hablar por voz** con los jugadores. Máximo 20 por mesa.
 - Una etiqueta "👁 N observadores" avisa a los jugadores (al tocarla muestra los nombres) y quien observa ve "Modo observador".
 - Si un observador se va, la partida no se entera. Los observadores no mantienen viva una mesa: sin jugadores humanos conectados se cierra igual.
@@ -200,7 +200,7 @@ PORT=8080 TURN_SECONDS=30 npm start
 
 **Cliente → servidor:** `setName`, `createRoom`, `joinRoom`, `spectateRoom`, `kick`, `leaveRoom`, `rejoin`, `forfeit`, `startGame`, `nextRound`, `rematch`, `play`, `draw`, `endTurn`, `pass`, `auto`, `redeal`, `chat`, `voice`, `signal`.
 
-**Servidor → cliente:** `named`, `room` (vista de la mesa; `null` = fuera de mesa), `notice` (aviso), `timeout` (el servidor jugó por alguien), `skipped`, `chat`, `chatHistory`, `signal`, `resume` (oferta de volver a una partida).
+**Servidor → cliente:** `named`, `rooms` (lista de mesas; las privadas van sin su código), `room` (vista de la mesa; `null` = fuera de mesa), `notice` (aviso), `timeout` (el servidor jugó por alguien), `skipped`, `chat`, `chatHistory`, `signal`, `resume` (oferta de volver a una partida).
 
 ---
 
